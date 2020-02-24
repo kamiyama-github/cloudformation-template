@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  awsCFsample:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      Tags:
+        - Key: name
+          Value: awsCFsampleVPC
+
+  #パブリックサブネット1a        
+  awsCFsamplePublicSubnet1a:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      VpcId: !Ref awsCFsampleVPC
+      CidrBlock: 10.0.0.0/24
+      Tags:
+        - Key: name
+          Value: awsCFsample-PublicSubnet-1a
+
+  #パブリックサブネット1c
+  awsCFsamplePublicSubnet1c:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: ap-northeast-1c
+      VpcId: !Ref awsCFsampleVPC
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: name
+          Value: awsCFsample-PublicSubnet-1c
+
+  #プライベートサブネット1a
+  awsCFsamplePrivateSubnet1a:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      VpcId: !Ref awsCFsampleVPC
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: name
+          Value: awsCFsample-PrivateSubnet-1a
+
+  #プライベートサブネット1c
+  awsCFsamplePrivateSubnet1c:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: ap-northeast-1c
+      VpcId: !Ref awsCFsampleVPC
+      CidrBlock: 10.0.3.0/24
+      Tags:
+        - Key: name
+          Value: awsCFsample-PrivateSubnet-1c
+
+  #インターネットゲートウェイ
+  awsCFsampleInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: name
+          Value: awsCFsample-InternetGateway
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref awsCFsampleVPC
+      InternetGatewayId: !Ref awsCFsampleInternetGateway
+
+  #ルートテーブル
+  awsCFsampleRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref awsCFsampleVPC
+      Tags:
+        - Key: name
+          Value: awsCFsample-RouteTable
+
+  #インターネットゲートウェイとルートテーブルの関連付け
+  awsCFsampleRouteInternet:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref awsCFsampleRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref awsCFsample-InternetGateway
+
+  #セキュリティグループ
+  awsCFsampleSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: awsCFsampleSecurityGroup
+      GroupDescription: This SecurityGroup is for awsCFsample
+      VpcId: !Ref awsCFsampleVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        #Railsアプリケーションサーバー用
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: name
+          Value: awsCFsample-SecurityGroup
+
+  #RDS用セキュリティグループ
+  awsCFsampleSecurityGroupRDS:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: awsCFsample-SecurityGroup-RDS
+      GroupDescription: This SecurityGroup is for RDS of awsCFsample
+      VpcId: !Ref awsCFsampleVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: name
+          Value: awsCFsample-SecurityGroup-RDS
+
+  #EC2インスタンス
+  awsCFsampleEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      KeyName: kamiyama-book-key
+      SubnetId: !Ref awsCFsamplePublicSubnet1a
+      ImageId: ami-0af1df87db7b650f4 
+      InstanceType: t2.micro
+      Monitoring: false
+      InstanceInitiatedShutdownBehavior: stop
+      SecurityGroupIds:
+        - !Ref awsCFsampleSecurityGroup
+      Tags:
+        - Key: name
+          Value: awsCFsample-EC2
+
+  awsCFsampleRDS:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: 20 
+      DBInstanceClass: db.t2.micro
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: true
+      AvailabilityZone: ap-northeast-1a
+      BackupRetentionPeriod: 1
+      DBInstanceIdentifier: awsCFsample-RDS-mysql
+      DBName: sample
+      DBParameterGroupName: default.mysql5.7 
+      DBSubnetGroupName: !Ref awsCFsampleSubnetGRP
+      Engine: mysql
+      EngineVersion: 5.7.26 
+      LicenseModel: gernal-public-license
+      MasterUsername: admin
+      MasterUserPassword: adminpass
+      MultiAZ: false
+      OptionGroupName: default:mysql-5-7 
+      Port: 3306
+      PubliclyAccessible: false
+      StorageType: gp2
+      VPCSecurityGroups:
+        - !Ref awsCFsampleSecurityGroupRDS
+      Tags:
+        - Key: name
+          Value: awsCFsample-RDS
+
+  #RDSのサブネットグループ
+  awsCFsampleSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: This SubnetGroup is for RDS of awsCFsample
+      SubnetIds:
+        - !Ref awsCFsamplePrivateSubnet1a
+        - !Ref awsCFsamplePrivateSubnet1c
+      Tags:
+        - Key: name
+          Value: awsCFsample-DB-SubnetGroup
